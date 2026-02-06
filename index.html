@@ -1,101 +1,136 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI Weather Briefer</title>
+
 <style>
-body { background:#0b1c2d; color:#e6eef6; font-family:system-ui; padding:20px }
-input,button { width:100%; font-size:18px; padding:12px; margin-top:10px }
-button { background:#1e88e5; color:white; border:none; border-radius:6px }
-pre { background:#102a43; padding:15px; margin-top:15px; border-radius:6px; white-space:pre-wrap }
+body {
+  background:#0b1c2d;
+  color:#e6eef6;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding:20px;
+}
+h2 { margin-bottom: 10px; }
+input {
+  width:100%;
+  font-size:18px;
+  padding:14px;
+  margin-top:10px;
+  border-radius:8px;
+  border:none;
+}
+.grid {
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:10px;
+  margin-top:12px;
+}
+button {
+  padding:12px;
+  font-size:16px;
+  background:#1e88e5;
+  color:white;
+  border:none;
+  border-radius:8px;
+}
+button.secondary {
+  background:#3b4d63;
+}
+pre {
+  background:#102a43;
+  padding:15px;
+  margin-top:15px;
+  border-radius:8px;
+  white-space:pre-wrap;
+  font-size:15px;
+}
 </style>
 </head>
+
 <body>
 
 <h2>AI Weather Briefer</h2>
 
-<input id="cmd" placeholder="KCLT | MET KCLT | TAF KCLT | BOTH KCLT | PIREP KCLT">
+<input id="icao" placeholder="ICAO (KCLT, EGLL, RJTT)" />
 
-<button onclick="run()">Run</button>
+<div class="grid">
+  <button onclick="run('metar')">METAR</button>
+  <button onclick="run('taf')">TAF</button>
+  <button onclick="run('both')">BOTH</button>
+  <button class="secondary" onclick="run('pirep')">PIREPs</button>
+  <button class="secondary" onclick="run('airsigmet')">SIGMET</button>
+  <button class="secondary" onclick="aiBrief()">AI BRIEF</button>
+</div>
 
 <pre id="out"></pre>
 
 <script>
 const BASE = "https://metar-proxy.leopassley-00.workers.dev";
 
-function getICAO(t) {
-  const m = t.match(/\b[A-Z]{4}\b/);
-  return m ? m[0] : null;
+function clean(text, icao) {
+  return text
+    .replace(/^METAR\s+/gm,"")
+    .replace(/^TAF\s+/gm,"")
+    .replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`,"gm"),"")
+    .trim();
 }
 
-function intent(t) {
-  t = t.toUpperCase();
-  if (t.includes("BOTH")) return "BOTH";
-  if (t.includes("TAF")) return "TAF";
-  if (t.includes("PIRE")) return "PIRE";
-  if (t.includes("SIG")) return "SIG";
-  if (t.includes("TCF")) return "TCF";
-  return "METAR";
-}
-
-async function run() {
-  const raw = document.getElementById("cmd").value.toUpperCase();
-  const icao = getICAO(raw);
+async function run(type) {
+  const icao = document.getElementById("icao").value.toUpperCase().trim();
   const out = document.getElementById("out");
 
-  if (!icao) {
-    out.textContent = "NO ICAO FOUND";
+  if (!icao && ["metar","taf","both","pirep"].includes(type)) {
+    out.textContent = "ENTER ICAO";
     return;
   }
 
   try {
-    const mode = intent(raw);
-
-    if (mode === "METAR") {
-      const r = await fetch(`${BASE}/metar?ids=${icao}`);
-      out.textContent = format("METAR", icao, await r.text());
-    }
-
-    if (mode === "TAF") {
-      const r = await fetch(`${BASE}/taf?ids=${icao}`);
-      out.textContent = format("TAF", icao, await r.text());
-    }
-
-    if (mode === "BOTH") {
-      const m = await (await fetch(`${BASE}/metar?ids=${icao}`)).text();
-      const t = await (await fetch(`${BASE}/taf?ids=${icao}`)).text();
+    if (type === "both") {
+      const m = await fetch(`${BASE}/metar?ids=${icao}`).then(r=>r.text());
+      const t = await fetch(`${BASE}/taf?ids=${icao}`).then(r=>r.text());
       out.textContent =
-        format("METAR", icao, m) + "\n\n" +
-        format("TAF", icao, t);
+`METAR ${icao}
+----------------
+${clean(m,icao)}
+
+TAF ${icao}
+----------------
+${clean(t,icao)}`;
+      return;
     }
 
-    if (mode === "PIRE") {
-      const r = await fetch(`${BASE}/pirep?ids=${icao}`);
-      out.textContent = r.text ? await r.text() : "NO PIREPS";
-    }
+    const endpoint =
+      type === "metar" ? `/metar?ids=${icao}` :
+      type === "taf" ? `/taf?ids=${icao}` :
+      type === "pirep" ? `/pirep?ids=${icao}` :
+      `/airsigmet`;
 
-    if (mode === "SIG") {
-      const r = await fetch(`${BASE}/airsigmet`);
-      out.textContent = await r.text();
-    }
-
-    if (mode === "TCF") {
-      const r = await fetch(`${BASE}/tcf`);
-      out.textContent = await r.text();
-    }
-
+    const data = await fetch(BASE + endpoint).then(r=>r.text());
+    out.textContent = clean(data, icao) || "NO DATA";
   } catch {
-    out.textContent = "ERROR";
+    out.textContent = "ERROR FETCHING DATA";
   }
 }
 
-function format(title, icao, text) {
-  const line = text.trim().split("\n")[0]
-    .replace(/^METAR\s+/,"")
-    .replace(/^TAF\s+/,"")
-    .replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`),"");
+async function aiBrief() {
+  const icao = document.getElementById("icao").value.toUpperCase().trim();
+  const out = document.getElementById("out");
 
-  return `${title} ${icao}\n----------------\n${line}`;
+  if (!icao) {
+    out.textContent = "ENTER ICAO";
+    return;
+  }
+
+  out.textContent = "GENERATING AI BRIEF…";
+
+  try {
+    const data = await fetch(`${BASE}/aibrief?ids=${icao}`).then(r => r.text());
+    out.textContent = data;
+  } catch {
+    out.textContent = "AI BRIEF FAILED";
+  }
 }
 </script>
 
