@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Airport Weather Brief</title>
+<title>Flight Weather Brief</title>
 
 <style>
 :root {
   --bg: radial-gradient(1200px 800px at top, #122b45, #081523);
-  --panel: rgba(16, 42, 67, 0.75);
+  --panel: rgba(16, 42, 67, 0.8);
   --border: rgba(255,255,255,0.08);
   --accent: linear-gradient(135deg, #2fa4ff, #1e88e5);
   --text: #e6eef6;
@@ -32,16 +32,13 @@ body {
 }
 
 .header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   margin-bottom: 18px;
 }
 
 .header h1 {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 700;
-  letter-spacing: 0.4px;
+  margin: 0;
 }
 
 .header span {
@@ -51,25 +48,25 @@ body {
 
 .card {
   background: var(--panel);
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(14px);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 18px;
   padding: 18px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 }
 
-.input-wrap {
+.input-row {
   display: flex;
   gap: 10px;
 }
 
 input {
   flex: 1;
-  padding: 16px;
+  padding: 18px;
   font-size: 22px;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--border);
-  background: rgba(8,21,35,0.8);
+  background: rgba(8,21,35,0.85);
   color: var(--text);
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -81,23 +78,33 @@ input::placeholder {
 }
 
 button {
-  padding: 16px 22px;
-  font-size: 18px;
+  padding: 18px 26px;
+  font-size: 17px;
   font-weight: 700;
-  border-radius: 12px;
+  border-radius: 14px;
   border: none;
   color: white;
   background: var(--accent);
-  box-shadow: 0 8px 20px rgba(30,136,229,0.45);
+  box-shadow: 0 10px 24px rgba(30,136,229,0.5);
 }
 
 button:active {
   transform: translateY(1px);
-  box-shadow: 0 6px 14px rgba(30,136,229,0.35);
+  box-shadow: 0 6px 16px rgba(30,136,229,0.35);
 }
 
-.brief {
+.hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.output {
   margin-top: 18px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(8,21,35,0.7);
+  border: 1px solid var(--border);
   white-space: pre-wrap;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 14.5px;
@@ -117,17 +124,21 @@ button:active {
 <div class="container">
 
   <div class="header">
-    <h1>Airport Weather Brief</h1>
-    <span>30 NM radius • Airport-focused • AWC data</span>
+    <h1>Flight Weather Brief</h1>
+    <span>Airport & Route-Focused • AWC Data</span>
   </div>
 
   <div class="card">
-    <div class="input-wrap">
-      <input id="icao" placeholder="KCLT" maxlength="4" />
-      <button onclick="brief()">BRIEF</button>
+    <div class="input-row">
+      <input id="query" placeholder="KCLT or KCLT KATL" maxlength="9" />
+      <button id="briefBtn" onclick="brief()">BRIEF</button>
     </div>
 
-    <div id="out" class="brief"></div>
+    <div class="hint">
+      Single ICAO = Airport brief • Two ICAOs = Flight brief
+    </div>
+
+    <div id="out" class="output"></div>
   </div>
 
   <div class="footer">
@@ -139,21 +150,33 @@ button:active {
 <script>
 const BASE = "https://metar-proxy.leopassley-00.workers.dev";
 
-async function brief() {
-  const icao = document.getElementById("icao").value.trim().toUpperCase();
-  const out = document.getElementById("out");
+const input = document.getElementById("query");
+const btn = document.getElementById("briefBtn");
+const out = document.getElementById("out");
 
-  if (!icao) {
-    out.textContent = "ENTER ICAO";
+input.addEventListener("input", () => {
+  const parts = input.value.trim().toUpperCase().split(/\s+/);
+  btn.textContent = (parts.length === 2) ? "BRIEF FLIGHT" : "BRIEF AIRPORT";
+});
+
+async function brief() {
+  const val = input.value.trim().toUpperCase();
+  if (!val) {
+    out.textContent = "ENTER ICAO OR DEP ARR";
     return;
   }
 
   out.textContent = "LOADING BRIEF…";
 
   try {
-    const text = await fetch(`${BASE}/brief?ids=${icao}&r=30`)
-      .then(r => r.text());
-    out.textContent = text;
+    const parts = val.split(/\s+/);
+    const url =
+      parts.length === 2
+        ? `${BASE}/flight?q=${parts[0]}%20${parts[1]}`
+        : `${BASE}/brief?ids=${parts[0]}&r=30`;
+
+    const data = await fetch(url).then(r => r.text());
+    out.textContent = data;
   } catch {
     out.textContent = "ERROR FETCHING BRIEF";
   }
