@@ -1,110 +1,101 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>WX Text</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body { font-family: system-ui, -apple-system, sans-serif; background:#0b1c2d; color:#e6eef6; padding:20px; }
-    input, button { font-size:18px; padding:12px; margin-top:12px; width:100%; }
-    button { background:#1e88e5; color:white; border:none; border-radius:6px; }
-    pre { background:#102a43; padding:15px; margin-top:15px; border-radius:6px; white-space:pre-wrap; font-size:16px; }
-    .row { display:flex; gap:10px; margin-top:12px; }
-    .row button { width:100%; }
-  </style>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Weather Briefer</title>
+<style>
+body { background:#0b1c2d; color:#e6eef6; font-family:system-ui; padding:20px }
+input,button { width:100%; font-size:18px; padding:12px; margin-top:10px }
+button { background:#1e88e5; color:white; border:none; border-radius:6px }
+pre { background:#102a43; padding:15px; margin-top:15px; border-radius:6px; white-space:pre-wrap }
+</style>
 </head>
 <body>
 
-<h2>WX</h2>
+<h2>AI Weather Briefer</h2>
 
-<input id="input" placeholder="KCLT | MET KCLT | TAF KCLT | BOTH KCLT" />
+<input id="cmd" placeholder="KCLT | MET KCLT | TAF KCLT | BOTH KCLT | PIREP KCLT">
 
-<div class="row">
-  <button onclick="runCmd('METAR')">METAR</button>
-  <button onclick="runCmd('TAF')">TAF</button>
-  <button onclick="runCmd('BOTH')">BOTH</button>
-</div>
+<button onclick="run()">Run</button>
 
-<button onclick="runFromText()">Run from Text</button>
-
-<pre id="output"></pre>
+<pre id="out"></pre>
 
 <script>
-const METAR_PROXY = "https://metar-proxy.leopassley-00.workers.dev/?ids=";
-// TAF needs its own proxy (AWC TAF endpoint also gets blocked by CORS)
-const TAF_PROXY   = "https://metar-proxy.leopassley-00.workers.dev/taf?ids=";
+const BASE = "https://metar-proxy.leopassley-00.workers.dev";
 
-function getICAO(raw) {
-  const m = raw.toUpperCase().match(/\b[A-Z]{4}\b/);
+function getICAO(t) {
+  const m = t.match(/\b[A-Z]{4}\b/);
   return m ? m[0] : null;
 }
 
-function parseIntent(raw) {
-  const t = raw.toUpperCase();
-  if (/\bBOTH\b/.test(t)) return "BOTH";
-  if (/\bTAF\b/.test(t)) return "TAF";
-  if (/\b(METAR|MET|M)\b/.test(t)) return "METAR";
-  return "METAR"; // default
+function intent(t) {
+  t = t.toUpperCase();
+  if (t.includes("BOTH")) return "BOTH";
+  if (t.includes("TAF")) return "TAF";
+  if (t.includes("PIRE")) return "PIRE";
+  if (t.includes("SIG")) return "SIG";
+  if (t.includes("TCF")) return "TCF";
+  return "METAR";
 }
 
-function formatBlock(title, icao, bodyLine) {
-  return `${title} ${icao}\n----------------\n${bodyLine}`;
-}
-
-async function fetchText(url) {
-  const r = await fetch(url);
-  return await r.text();
-}
-
-function cleanMetarLine(icao, text) {
-  const line = text.trim().split("\n")[0];
-  return line
-    .replace(/^METAR\s+/i, "")
-    .replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`, "i"), "");
-}
-
-function cleanTafText(icao, text) {
-  // Keep first chunk; TAF can be multi-line — we’ll keep it readable.
-  const taf = text.trim();
-  // If AWC returns multiple, just show first.
-  const first = taf.split("\n\n")[0].trim();
-  // remove leading ICAO + issue time if present (optional)
-  return first.replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`, "i"), "");
-}
-
-async function runCmd(intent) {
-  const raw = document.getElementById("input").value;
+async function run() {
+  const raw = document.getElementById("cmd").value.toUpperCase();
   const icao = getICAO(raw);
-  const out = document.getElementById("output");
+  const out = document.getElementById("out");
 
-  if (!icao) { out.textContent = "NO METAR AVAILABLE FOR XXXX"; return; }
+  if (!icao) {
+    out.textContent = "NO ICAO FOUND";
+    return;
+  }
 
   try {
-    if (intent === "METAR") {
-      const text = await fetchText(METAR_PROXY + icao);
-      if (!text || text.includes("No data")) { out.textContent = `NO METAR AVAILABLE FOR ${icao}`; return; }
-      out.textContent = formatBlock("METAR", icao, cleanMetarLine(icao, text));
-      return;
+    const mode = intent(raw);
+
+    if (mode === "METAR") {
+      const r = await fetch(`${BASE}/metar?ids=${icao}`);
+      out.textContent = format("METAR", icao, await r.text());
     }
 
-    if (intent === "TAF") {
-      out.textContent = "TAF is next — needs a 2nd proxy endpoint.";
-      return;
+    if (mode === "TAF") {
+      const r = await fetch(`${BASE}/taf?ids=${icao}`);
+      out.textContent = format("TAF", icao, await r.text());
     }
 
-    if (intent === "BOTH") {
-      out.textContent = "BOTH is next — needs TAF proxy too.";
-      return;
+    if (mode === "BOTH") {
+      const m = await (await fetch(`${BASE}/metar?ids=${icao}`)).text();
+      const t = await (await fetch(`${BASE}/taf?ids=${icao}`)).text();
+      out.textContent =
+        format("METAR", icao, m) + "\n\n" +
+        format("TAF", icao, t);
     }
+
+    if (mode === "PIRE") {
+      const r = await fetch(`${BASE}/pirep?ids=${icao}`);
+      out.textContent = r.text ? await r.text() : "NO PIREPS";
+    }
+
+    if (mode === "SIG") {
+      const r = await fetch(`${BASE}/airsigmet`);
+      out.textContent = await r.text();
+    }
+
+    if (mode === "TCF") {
+      const r = await fetch(`${BASE}/tcf`);
+      out.textContent = await r.text();
+    }
+
   } catch {
-    out.textContent = "ERROR FETCHING METAR";
+    out.textContent = "ERROR";
   }
 }
 
-async function runFromText() {
-  const raw = document.getElementById("input").value;
-  const intent = parseIntent(raw);
-  await runCmd(intent);
+function format(title, icao, text) {
+  const line = text.trim().split("\n")[0]
+    .replace(/^METAR\s+/,"")
+    .replace(/^TAF\s+/,"")
+    .replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`),"");
+
+  return `${title} ${icao}\n----------------\n${line}`;
 }
 </script>
 
