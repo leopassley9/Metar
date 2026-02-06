@@ -54,7 +54,7 @@ async function getMetar() {
   }
 
   const icao = match[0];
-  const url = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=raw&mostRecent=true`;
+  const url = `https://metar-proxy.leopassley-00.workers.dev/?ids=${icao}`;
 
   try {
     const res = await fetch(url);
