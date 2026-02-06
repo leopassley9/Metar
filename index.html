@@ -3,119 +3,100 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Weather Briefer</title>
+<title>Airport Weather Brief</title>
 
 <style>
+:root {
+  --bg: #0b1c2d;
+  --panel: #102a43;
+  --accent: #1e88e5;
+  --text: #e6eef6;
+  --muted: #9fb3c8;
+}
+
 body {
-  background:#0b1c2d;
-  color:#e6eef6;
-  font-family: system-ui, -apple-system, sans-serif;
-  padding:20px;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, system-ui, sans-serif;
 }
-h2 { margin-bottom: 10px; }
+
+.container {
+  max-width: 700px;
+  margin: auto;
+  padding: 20px;
+}
+
+h1 {
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+
 input {
-  width:100%;
-  font-size:18px;
-  padding:14px;
-  margin-top:10px;
-  border-radius:8px;
-  border:none;
+  width: 100%;
+  font-size: 22px;
+  padding: 16px;
+  border-radius: 10px;
+  border: none;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
-.grid {
-  display:grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap:10px;
-  margin-top:12px;
-}
+
 button {
-  padding:12px;
-  font-size:16px;
-  background:#1e88e5;
-  color:white;
-  border:none;
-  border-radius:8px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 16px;
+  font-size: 20px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
 }
-button.secondary {
-  background:#3b4d63;
+
+button:active {
+  opacity: 0.9;
 }
+
 pre {
-  background:#102a43;
-  padding:15px;
-  margin-top:15px;
-  border-radius:8px;
-  white-space:pre-wrap;
-  font-size:15px;
+  background: var(--panel);
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 10px;
+  white-space: pre-wrap;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.footer {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
 }
 </style>
 </head>
 
 <body>
+<div class="container">
+  <h1>Airport Weather Brief</h1>
 
-<h2>AI Weather Briefer</h2>
+  <input id="icao" placeholder="Enter ICAO (e.g. KCLT)" />
 
-<input id="icao" placeholder="ICAO (KCLT, EGLL, RJTT)" />
+  <button onclick="brief()">BRIEF 30 NM</button>
 
-<div class="grid">
-  <button onclick="run('metar')">METAR</button>
-  <button onclick="run('taf')">TAF</button>
-  <button onclick="run('both')">BOTH</button>
-  <button class="secondary" onclick="run('pirep')">PIREPs</button>
-  <button class="secondary" onclick="run('airsigmet')">SIGMET</button>
-  <button class="secondary" onclick="aiBrief()">AI BRIEF</button>
+  <pre id="out"></pre>
+
+  <div class="footer">
+    AWC data • 30 NM radius • Airport-focused
+  </div>
 </div>
-
-<pre id="out"></pre>
 
 <script>
 const BASE = "https://metar-proxy.leopassley-00.workers.dev";
 
-function clean(text, icao) {
-  return text
-    .replace(/^METAR\s+/gm,"")
-    .replace(/^TAF\s+/gm,"")
-    .replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`,"gm"),"")
-    .trim();
-}
-
-async function run(type) {
-  const icao = document.getElementById("icao").value.toUpperCase().trim();
-  const out = document.getElementById("out");
-
-  if (!icao && ["metar","taf","both","pirep"].includes(type)) {
-    out.textContent = "ENTER ICAO";
-    return;
-  }
-
-  try {
-    if (type === "both") {
-      const m = await fetch(`${BASE}/metar?ids=${icao}`).then(r=>r.text());
-      const t = await fetch(`${BASE}/taf?ids=${icao}`).then(r=>r.text());
-      out.textContent =
-`METAR ${icao}
-----------------
-${clean(m,icao)}
-
-TAF ${icao}
-----------------
-${clean(t,icao)}`;
-      return;
-    }
-
-    const endpoint =
-      type === "metar" ? `/metar?ids=${icao}` :
-      type === "taf" ? `/taf?ids=${icao}` :
-      type === "pirep" ? `/pirep?ids=${icao}` :
-      `/airsigmet`;
-
-    const data = await fetch(BASE + endpoint).then(r=>r.text());
-    out.textContent = clean(data, icao) || "NO DATA";
-  } catch {
-    out.textContent = "ERROR FETCHING DATA";
-  }
-}
-
-async function aiBrief() {
-  const icao = document.getElementById("icao").value.toUpperCase().trim();
+async function brief() {
+  const icao = document.getElementById("icao").value.trim().toUpperCase();
   const out = document.getElementById("out");
 
   if (!icao) {
@@ -123,16 +104,16 @@ async function aiBrief() {
     return;
   }
 
-  out.textContent = "GENERATING AI BRIEF…";
+  out.textContent = "LOADING BRIEF…";
 
   try {
-    const data = await fetch(`${BASE}/aibrief?ids=${icao}`).then(r => r.text());
-    out.textContent = data;
+    const text = await fetch(`${BASE}/brief?ids=${icao}&r=30`)
+      .then(r => r.text());
+    out.textContent = text;
   } catch {
-    out.textContent = "AI BRIEF FAILED";
+    out.textContent = "ERROR FETCHING BRIEF";
   }
 }
 </script>
-
 </body>
 </html>
