@@ -8,7 +8,7 @@
 <style>
 :root {
   --bg: radial-gradient(1200px 800px at top, #122b45, #081523);
-  --panel: rgba(16, 42, 67, 0.8);
+  --panel: rgba(16, 42, 67, 0.82);
   --border: rgba(255,255,255,0.08);
   --accent: linear-gradient(135deg, #2fa4ff, #1e88e5);
   --text: #e6eef6;
@@ -55,13 +55,19 @@ body {
   box-shadow: 0 20px 40px rgba(0,0,0,0.4);
 }
 
-.input-row {
-  display: flex;
+.fields {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   gap: 10px;
+  align-items: center;
+}
+
+.arrow {
+  font-size: 22px;
+  color: var(--muted);
 }
 
 input {
-  flex: 1;
   padding: 18px;
   font-size: 22px;
   border-radius: 14px;
@@ -70,6 +76,7 @@ input {
   color: var(--text);
   text-transform: uppercase;
   letter-spacing: 2px;
+  text-align: center;
 }
 
 input::placeholder {
@@ -78,8 +85,10 @@ input::placeholder {
 }
 
 button {
-  padding: 18px 26px;
-  font-size: 17px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 18px;
+  font-size: 18px;
   font-weight: 700;
   border-radius: 14px;
   border: none;
@@ -91,12 +100,6 @@ button {
 button:active {
   transform: translateY(1px);
   box-shadow: 0 6px 16px rgba(30,136,229,0.35);
-}
-
-.hint {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--muted);
 }
 
 .output {
@@ -125,24 +128,23 @@ button:active {
 
   <div class="header">
     <h1>Flight Weather Brief</h1>
-    <span>Airport & Route-Focused • AWC Data</span>
+    <span>Route-focused • AWC data</span>
   </div>
 
   <div class="card">
-    <div class="input-row">
-      <input id="query" placeholder="KCLT or KCLT KATL" maxlength="9" />
-      <button id="briefBtn" onclick="brief()">BRIEF</button>
+    <div class="fields">
+      <input id="dep" placeholder="DEP" maxlength="4" />
+      <div class="arrow">→</div>
+      <input id="arr" placeholder="ARR" maxlength="4" />
     </div>
 
-    <div class="hint">
-      Single ICAO = Airport brief • Two ICAOs = Flight brief
-    </div>
+    <button onclick="flightBrief()">FLIGHT BRIEF</button>
 
     <div id="out" class="output"></div>
   </div>
 
   <div class="footer">
-    Built for quick captain decisions ✈️
+    Captain-focused briefing • 30–40 NM corridor
   </div>
 
 </div>
@@ -150,35 +152,24 @@ button:active {
 <script>
 const BASE = "https://metar-proxy.leopassley-00.workers.dev";
 
-const input = document.getElementById("query");
-const btn = document.getElementById("briefBtn");
-const out = document.getElementById("out");
+async function flightBrief() {
+  const dep = document.getElementById("dep").value.trim().toUpperCase();
+  const arr = document.getElementById("arr").value.trim().toUpperCase();
+  const out = document.getElementById("out");
 
-input.addEventListener("input", () => {
-  const parts = input.value.trim().toUpperCase().split(/\s+/);
-  btn.textContent = (parts.length === 2) ? "BRIEF FLIGHT" : "BRIEF AIRPORT";
-});
-
-async function brief() {
-  const val = input.value.trim().toUpperCase();
-  if (!val) {
-    out.textContent = "ENTER ICAO OR DEP ARR";
+  if (!dep || !arr) {
+    out.textContent = "ENTER DEP AND ARR ICAO";
     return;
   }
 
-  out.textContent = "LOADING BRIEF…";
+  out.textContent = "LOADING FLIGHT BRIEF…";
 
   try {
-    const parts = val.split(/\s+/);
-    const url =
-      parts.length === 2
-        ? `${BASE}/flight?q=${parts[0]}%20${parts[1]}`
-        : `${BASE}/brief?ids=${parts[0]}&r=30`;
-
-    const data = await fetch(url).then(r => r.text());
+    const data = await fetch(`${BASE}/flight?q=${dep}%20${arr}`)
+      .then(r => r.text());
     out.textContent = data;
   } catch {
-    out.textContent = "ERROR FETCHING BRIEF";
+    out.textContent = "ERROR FETCHING FLIGHT BRIEF";
   }
 }
 </script>
