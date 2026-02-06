@@ -2,84 +2,109 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>METAR</title>
+  <title>WX Text</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #0b1c2d;
-      color: #e6eef6;
-      padding: 20px;
-    }
-    input, button {
-      font-size: 18px;
-      padding: 12px;
-      margin-top: 12px;
-      width: 100%;
-    }
-    button {
-      background: #1e88e5;
-      color: white;
-      border: none;
-      border-radius: 6px;
-    }
-    pre {
-      background: #102a43;
-      padding: 15px;
-      margin-top: 15px;
-      border-radius: 6px;
-      white-space: pre-wrap;
-      font-size: 16px;
-    }
+    body { font-family: system-ui, -apple-system, sans-serif; background:#0b1c2d; color:#e6eef6; padding:20px; }
+    input, button { font-size:18px; padding:12px; margin-top:12px; width:100%; }
+    button { background:#1e88e5; color:white; border:none; border-radius:6px; }
+    pre { background:#102a43; padding:15px; margin-top:15px; border-radius:6px; white-space:pre-wrap; font-size:16px; }
+    .row { display:flex; gap:10px; margin-top:12px; }
+    .row button { width:100%; }
   </style>
 </head>
 <body>
 
-<h2>METAR</h2>
+<h2>WX</h2>
 
-<input id="input" placeholder="MET KCLT or KCLT" />
-<button onclick="getMetar()">Get METAR</button>
+<input id="input" placeholder="KCLT | MET KCLT | TAF KCLT | BOTH KCLT" />
+
+<div class="row">
+  <button onclick="runCmd('METAR')">METAR</button>
+  <button onclick="runCmd('TAF')">TAF</button>
+  <button onclick="runCmd('BOTH')">BOTH</button>
+</div>
+
+<button onclick="runFromText()">Run from Text</button>
 
 <pre id="output"></pre>
 
 <script>
-async function getMetar() {
-  const raw = document.getElementById("input").value.toUpperCase();
-  const match = raw.match(/\b[A-Z]{4}\b/);
+const METAR_PROXY = "https://metar-proxy.leopassley-00.workers.dev/?ids=";
+// TAF needs its own proxy (AWC TAF endpoint also gets blocked by CORS)
+const TAF_PROXY   = "https://metar-proxy.leopassley-00.workers.dev/taf?ids=";
 
-  if (!match) {
-    document.getElementById("output").textContent =
-      "NO METAR AVAILABLE FOR XXXX";
-    return;
-  }
+function getICAO(raw) {
+  const m = raw.toUpperCase().match(/\b[A-Z]{4}\b/);
+  return m ? m[0] : null;
+}
 
-  const icao = match[0];
-  const url = `https://metar-proxy.leopassley-00.workers.dev/?ids=${icao}`;
+function parseIntent(raw) {
+  const t = raw.toUpperCase();
+  if (/\bBOTH\b/.test(t)) return "BOTH";
+  if (/\bTAF\b/.test(t)) return "TAF";
+  if (/\b(METAR|MET|M)\b/.test(t)) return "METAR";
+  return "METAR"; // default
+}
+
+function formatBlock(title, icao, bodyLine) {
+  return `${title} ${icao}\n----------------\n${bodyLine}`;
+}
+
+async function fetchText(url) {
+  const r = await fetch(url);
+  return await r.text();
+}
+
+function cleanMetarLine(icao, text) {
+  const line = text.trim().split("\n")[0];
+  return line
+    .replace(/^METAR\s+/i, "")
+    .replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`, "i"), "");
+}
+
+function cleanTafText(icao, text) {
+  // Keep first chunk; TAF can be multi-line — we’ll keep it readable.
+  const taf = text.trim();
+  // If AWC returns multiple, just show first.
+  const first = taf.split("\n\n")[0].trim();
+  // remove leading ICAO + issue time if present (optional)
+  return first.replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`, "i"), "");
+}
+
+async function runCmd(intent) {
+  const raw = document.getElementById("input").value;
+  const icao = getICAO(raw);
+  const out = document.getElementById("output");
+
+  if (!icao) { out.textContent = "NO METAR AVAILABLE FOR XXXX"; return; }
 
   try {
-    const res = await fetch(url);
-    const text = await res.text();
-
-    if (!text || text.includes("No data")) {
-      document.getElementById("output").textContent =
-        `NO METAR AVAILABLE FOR ${icao}`;
+    if (intent === "METAR") {
+      const text = await fetchText(METAR_PROXY + icao);
+      if (!text || text.includes("No data")) { out.textContent = `NO METAR AVAILABLE FOR ${icao}`; return; }
+      out.textContent = formatBlock("METAR", icao, cleanMetarLine(icao, text));
       return;
     }
 
-    const line = text.trim().split("\n")[0];
-    const cleaned = line
-      .replace(/^METAR\s+/i, "")
-      .replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`, "i"), "");
+    if (intent === "TAF") {
+      out.textContent = "TAF is next — needs a 2nd proxy endpoint.";
+      return;
+    }
 
-    document.getElementById("output").textContent =
-`METAR ${icao}
-----------------
-${cleaned}`;
-
+    if (intent === "BOTH") {
+      out.textContent = "BOTH is next — needs TAF proxy too.";
+      return;
+    }
   } catch {
-    document.getElementById("output").textContent =
-      "ERROR FETCHING METAR";
+    out.textContent = "ERROR FETCHING METAR";
   }
+}
+
+async function runFromText() {
+  const raw = document.getElementById("input").value;
+  const intent = parseIntent(raw);
+  await runCmd(intent);
 }
 </script>
 
