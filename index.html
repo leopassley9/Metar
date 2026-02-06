@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>METAR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0b1c2d;
+      color: #e6eef6;
+      padding: 20px;
+    }
+    input, button {
+      font-size: 18px;
+      padding: 12px;
+      margin-top: 12px;
+      width: 100%;
+    }
+    button {
+      background: #1e88e5;
+      color: white;
+      border: none;
+      border-radius: 6px;
+    }
+    pre {
+      background: #102a43;
+      padding: 15px;
+      margin-top: 15px;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>METAR</h2>
+
+<input id="input" placeholder="MET KCLT or KCLT" />
+<button onclick="getMetar()">Get METAR</button>
+
+<pre id="output"></pre>
+
+<script>
+async function getMetar() {
+  const raw = document.getElementById("input").value.toUpperCase();
+  const match = raw.match(/\b[A-Z]{4}\b/);
+
+  if (!match) {
+    document.getElementById("output").textContent =
+      "NO METAR AVAILABLE FOR XXXX";
+    return;
+  }
+
+  const icao = match[0];
+  const url = `https://aviationweather.gov/api/data/metar?ids=${icao}&format=raw&mostRecent=true`;
+
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+
+    if (!text || text.includes("No data")) {
+      document.getElementById("output").textContent =
+        `NO METAR AVAILABLE FOR ${icao}`;
+      return;
+    }
+
+    const line = text.trim().split("\n")[0];
+    const cleaned = line
+      .replace(/^METAR\s+/i, "")
+      .replace(new RegExp(`^${icao}\\s+\\d{6}Z\\s+`, "i"), "");
+
+    document.getElementById("output").textContent =
+`METAR ${icao}
+----------------
+${cleaned}`;
+
+  } catch {
+    document.getElementById("output").textContent =
+      "ERROR FETCHING METAR";
+  }
+}
+</script>
+
+</body>
+</html>
